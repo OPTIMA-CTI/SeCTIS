@@ -30,6 +30,7 @@ SeCTIS is a novel framework designed to enable **privacy-preserving**, **trustwo
 Make sure you have Python 3.x installed and necessary packages.
 
 pip install -r requirements.txt
+
 python main.py
 
 ## 📚 Citation

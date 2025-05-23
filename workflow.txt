@@ -1,0 +1,95 @@
+Clients
+Query a smart contract to see if the next round is ready. If the next round is ready, get the IPFS hash of the latest global model and download it from IPFS. Once download, train the model with your own data.
+Once you train the model do the followings:
+#   -  Query the blockchain and get the SRS string.
+#   -  Convert pytorch model to ONNX.
+#   -  Generate the circuit using EZKL library.
+#   -  Deploy the circuit to ethereum blockchain using EZKL Libary and foundry.
+#   -  Call the main smart contract on blockchain and upload the contract address of the verifier smart contract for your ONNX model. 
+#   -  Upload the gradients hash, model hash to the main smart contract on the blockchain and the files to the IPFS.
+
+
+SETUP
+
+This is done by the system generator.
+
+1- Deploy the *CoordinatorContract* contract.
+2- Whitelist organizations [Organizations provide their public key (also known as blockchain wallet address) ]
+    . This way when a submission occurs, if the msg.sender (transaction sender) isn't whitelisted,  CoordinatorContract will not accept the submissions.
+        . Submissions can be  - Individual Verifier Smart Contract Address, IPFS Model Hash, Gradient Updates.
+
+- Once the CoordinatorContract is ready, the federated learning scheme can begin.
+- Our CoordinatorContract is public and permissionless; this means any organization can start a federated learning (swarm learning in our case) process.
+- Permissionless is achieved by having a public startLearning function. 
+- startLearning function takes 2 inputs: 
+    . The first input is an address -> Aggregator. 
+    . The second is a list of addresses which are whitelisted organizations. 
+
+After this, the swarm learning scheme has a specific ID.
+
+Organizations (Learning Nodes)
+
+- Query the *isReady*  function in the CoordinatorContract.
+- If the *isReady* returns true, query the *srsIPFSHash*, qeury the *globalModelIPFSHash* function. -> Download them from IPFS.
+- <START PYTORCH TRAINING>
+- Convert the pytorch model into an ONNX format.
+- Create the circuit and generate the *verify.sol* file <LOOK AT THE CIRCUIT GENERATION PART>
+- Deploy the *verify.sol* to blockchain.
+- Get the smart contract address of the *verify.sol*, and submit this into the *submitVerifierContractAddress* function in the CoordinatorContract.
+- Start querying for *ValidatorList* function. (To see if the learning node is selected as a validator)
+
+- After every learning node submits their verifier smart contracts addresses to the CoordinatorContract, CoordinatorContract selects the validator set as random.
+
+Organizations (Validators)
+
+- Organizations start querying the *isValidator* function in CoordinatorContract. 
+- If their public key returns true, they can query the *localModelIPFSHashes* and *localModelVerifiers* functions.
+- Download the models.
+- Run the test cases for the models, generates proofs using ZKML library.
+- Submits the proofs to the verifier contracts for each of the model.
+- Publish the result.
+
+Aggregator (Any organization can be an Aggregator since the aggregation part is publicly verifieable with all the files being publicly available)
+Calculates the trust and reputation scores, updates the values in coordinator smart contract, and based on the thresholds, it aggregates the models which pass the threshold.
+
+ One Global epoch is completed.
+
+
+
+<------------------ CIRCUIT GENERATION ------------------------------->
+
+-> you need forge installed. "https://book.getfoundry.sh/getting-started/installation"
+-> you need the libraries install "pip install -r requirements"
+
+- Type "anvil" and start the local chain.
+- Deploy the coordinator contract -> "forge create <ContractName> --interactive"
+- in the interactive shell, insert the private key of the deployer address.
+- change the parameters in the .env file
+
+To generate verifier contract on-chain
+
+- Have  network.onnx + input.json files ready. (END OF THE TRAINING PHASE) +  SRS file.
+- Run "ezkl gen-settings -M network.onnx" to generate the settings.json
+- Run "ezkl calibrate-settings -M network.onnx -D input.json --target resources "
+- Run "zkl get-srs -S settings.json"
+- Run "ezkl compile-circuit -M network.onnx -S settings.json --compiled-circuit network.ezkl"
+- Run "ezkl setup -M network.ezkl --srs-path=kzg.srs" (your srs is inside the directory)
+
+Once the above commands are run, we have everything ready to generate the solidity verifier.
+
+- Run "ezkl create-evm-verifier --srs-path=kzg.srs --vk-path vk.key --sol-code-path verif.sol --settings-path=settings.json"
+- Run "ezkl gen-witness -D input.json -M network.ezkl" AND "ezkl prove --witness witness.json -M network.ezkl --proof-path model.pf --pk-path pk.key --srs-path=kzg.srs" (GENERATE THE PROOF AND WITNESS)
+
+DEPLOY THE SOLIDITY CONTRACT TO AVAIL
+
+- Run ezkl "deploy-evm-verifier --addr-path=addr.txt --rpc-url=http://127.0.0.1:8545 --sol-code-path verif.sol"(DEPLOY THE VERIFIER)
+- Run "ezkl verify-evm --proof-path model.pf --addr-verifier=$(cat addr.txt) --rpc-url=http://127.0.0.1:8545"  (VERIFY THE PROOF)
+
+IPFS integration
+
+-> DOWNLOAD IPFS https://dist.ipfs.tech/#go-ipfs
+-> SETUP IPFS
+
+-> Aggregate Proof 
+-> IPFS integration 
+-> script file include all installations
